@@ -18,6 +18,8 @@ from datetime import datetime
 
 import numpy as np
 import pandas as pd
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.path import Path
 from matplotlib.backends.backend_pdf import PdfPages
@@ -532,7 +534,7 @@ with st.sidebar:
     n_pts = st.select_slider("Points par pivot", options=[20, 30, 40, 60, 80], value=60)
     n_theta = st.select_slider("Nombre d'angles balayés", options=[12, 24, 36, 48, 72, 96], value=48)
 
-    calculer_btn = st.button("Calculer / Recalculer la surface", type="primary", width='stretch')
+    calculer_btn = st.button("Calculer / Recalculer la surface", type="primary", use_container_width=True)
 
 cfg = dict(
     type_section=type_section, b=b, h=h, D=D, d_p=d_p,
@@ -566,10 +568,10 @@ tab_section, tab_3d, tab_coupe, tab_verif, tab_export = st.tabs(
 )
 
 with tab_section:
-    st.pyplot(figure_section(cfg_actif, res), width='content')
+    st.pyplot(figure_section(cfg_actif, res), use_container_width=False)
 
 with tab_3d:
-    st.plotly_chart(figure_surface_3d(res), width='stretch')
+    st.plotly_chart(figure_surface_3d(res), use_container_width=True)
     st.caption(
         f"Plage N : [{res['branches_N'].min()/1e3:.0f} ; {res['branches_N'].max()/1e3:.0f}] kN — "
         f"Plage My : [{res['branches_My'].min()/1e3:.1f} ; {res['branches_My'].max()/1e3:.1f}] kN.m — "
@@ -581,7 +583,7 @@ with tab_coupe:
     n_max = float(res["branches_N"].max() / 1e3)
     N_cible = st.slider("N (kN)", min_value=n_min, max_value=n_max, value=0.0, step=(n_max - n_min) / 200)
     fig_coupe, My_c, Mz_c = figure_coupe(N_cible, res, cfg_actif["n_theta"])
-    st.pyplot(fig_coupe, width='content')
+    st.pyplot(fig_coupe, use_container_width=False)
 
 with tab_verif:
     st.write("Vérifie si un point de sollicitation (N_Ed, My_Ed, Mz_Ed) est à l'intérieur de la surface de résistance.")
@@ -595,7 +597,7 @@ with tab_verif:
         if fig_v is None:
             st.warning("N_Ed est hors de la plage résistante de la section (aucune coupe valide).")
         else:
-            st.pyplot(fig_v, width='content')
+            st.pyplot(fig_v, use_container_width=False)
             if est_dedans:
                 st.success(f"Section VÉRIFIÉE : le point (N_Ed={N_Ed:.0f} kN, My_Ed={My_Ed:.1f}, "
                            f"Mz_Ed={Mz_Ed:.1f} kN.m) est à l'intérieur de la surface de résistance.")
@@ -613,7 +615,7 @@ with tab_export:
     if df_crit is None:
         st.warning("N hors de la plage résistante de la section.")
     else:
-        st.dataframe(df_crit.round(2), width='stretch', hide_index=True)
+        st.dataframe(df_crit.round(2), use_container_width=True, hide_index=True)
 
         ec1, ec2 = st.columns(2)
         excel_buffer = exporter_excel_bytes(N_export, res, cfg_actif["n_theta"])
@@ -621,7 +623,7 @@ with tab_export:
             "Télécharger Excel (.xlsx)", data=excel_buffer,
             file_name=f"resultats_N{N_export:.0f}kN.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            width='stretch',
+            use_container_width=True,
         )
 
         pdf_buffer = generer_rapport_pdf_bytes(cfg_actif, res, N_export, cfg_actif["n_theta"])
@@ -629,5 +631,5 @@ with tab_export:
             "Télécharger le rapport (.pdf)", data=pdf_buffer,
             file_name=f"rapport_diagramme_N{N_export:.0f}kN.pdf",
             mime="application/pdf",
-            width='stretch',
+            use_container_width=True,
         )
