@@ -84,13 +84,19 @@ def generer_armatures_perimetre_rect(b, h, d_p, nx_barres, ny_barres, diam_mm):
     return x, y, A
 
 
-def generer_armatures_couronne_circ(D, d_p, n_barres, diam_mm):
-    A_barre = np.pi * (diam_mm / 1000 / 2) ** 2
-    R, r_s = D / 2, D / 2 - d_p
-    theta = np.linspace(0, 2*np.pi, n_barres, endpoint=False)
-    x, y = r_s * np.cos(theta), r_s * np.sin(theta)
-    A = np.full(n_barres, A_barre)
-    return x, y, A
+def generer_armatures_multi_couronnes_circ(D, nappes):
+    """nappes : liste de 1 à 4 dicts {n_barres, diam_mm, d_p}, chacun formant
+    une couronne de barres à son propre enrobage."""
+    xs, ys, As = [], [], []
+    for nappe in nappes:
+        n_barres, diam_mm, d_p = nappe["n_barres"], nappe["diam_mm"], nappe["d_p"]
+        A_barre = np.pi * (diam_mm / 1000 / 2) ** 2
+        r_s = D / 2 - d_p
+        theta = np.linspace(0, 2*np.pi, n_barres, endpoint=False)
+        xs.append(r_s * np.cos(theta))
+        ys.append(r_s * np.sin(theta))
+        As.append(np.full(n_barres, A_barre))
+    return np.concatenate(xs), np.concatenate(ys), np.concatenate(As)
 
 
 def get_U_extremes(theta, type_section, b, h, D):
@@ -263,9 +269,7 @@ def calculer_tout(cfg):
             cfg["b"], cfg["h"], cfg["d_p"], cfg["nx_barres"], cfg["ny_barres"], cfg["diam_mm"]
         )
     else:
-        Xa, Ya, DA = generer_armatures_couronne_circ(
-            cfg["D"], cfg["d_p"], cfg["n_barres"], cfg["diam_mm"]
-        )
+        Xa, Ya, DA = generer_armatures_multi_couronnes_circ(cfg["D"], cfg["nappes"])
 
     esu, ebu, e0, ecu = 10e-3, -3.5e-3, -2e-3, -2e-3
     EPS_GEOM = 1e-9
@@ -393,8 +397,8 @@ def exporter_excel_bytes(N_cible_kN, res, n_theta):
         return None
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-        df_crit.round(3).to_excel(writer, sheet_name="Points critiques", index=False)
         df_contour.round(3).to_excel(writer, sheet_name="Contour complet", index=False)
+        df_crit.round(3).to_excel(writer, sheet_name="Points critiques", index=False)
     buffer.seek(0)
     return buffer
 
@@ -410,6 +414,9 @@ def generer_rapport_pdf_bytes(cfg, res, N_cible_kN, n_theta):
         # ---- Page 1 : résumé géométrie / matériaux ----
         fig, ax = plt.subplots(figsize=(8.27, 11.69))
         ax.axis('off')
+        ax.text(0.97, 0.99, "Cet outil de calcul est développé par Charfi Kaies",
+                fontsize=7, color='gray', style='italic', ha='right', va='top',
+                transform=ax.transAxes)
         texte = "RAPPORT — Diagramme d'interaction biaxial N-My-Mz\n"
         texte += f"Généré le {datetime.now().strftime('%d/%m/%Y à %H:%M')}\n"
         texte += "=" * 55 + "\n\nGÉOMÉTRIE\n" + "-" * 55 + "\n"
@@ -420,8 +427,9 @@ def generer_rapport_pdf_bytes(cfg, res, N_cible_kN, n_theta):
             texte += f"Ferraillage : {cfg['nx_barres']} barres/face horiz., {cfg['ny_barres']} barres/face vert., Ø{cfg['diam_mm']} mm\n"
         else:
             texte += f"Diamètre D = {cfg['D']*100:.0f} cm\n"
-            texte += f"Enrobage d_p = {cfg['d_p']*100:.1f} cm\n"
-            texte += f"Ferraillage : {cfg['n_barres']} barres, Ø{cfg['diam_mm']} mm\n"
+            for i, nappe in enumerate(cfg["nappes"]):
+                texte += (f"  Nappe {i+1} : {nappe['n_barres']} x Ø{nappe['diam_mm']} mm, "
+                          f"enrobage = {nappe['d_p']*100:.1f} cm\n")
 
         texte += f"\nAcier total : {np.sum(res['DA'])*1e4:.2f} cm²   "
         texte += f"(taux = {np.sum(res['DA'])/np.sum(res['dA'])*100:.2f} %)\n"
@@ -493,8 +501,25 @@ def generer_rapport_pdf_bytes(cfg, res, N_cible_kN, n_theta):
 # ============================================================
 
 st.set_page_config(page_title="Diagramme biaxial N-My-Mz (EC2)", layout="wide")
-st.title("Diagramme d'interaction biaxial N-My-Mz (Eurocode 2)")
-st.caption("Calcul par balayage de l'angle de l'axe neutre, discrétisation en grille de fibres.")
+
+col_titre, col_credit = st.columns([5, 1.3])
+with col_titre:
+    st.title("Diagramme d'interaction biaxial N-My-Mz (Eurocode 2)")
+    st.caption("Calcul par balayage de l'angle de l'axe neutre, discrétisation en grille de fibres.")
+with col_credit:
+    st.markdown(
+        "<div style='text-align:right; font-size:0.75rem; color:gray; padding-top:1.6rem;'>"
+        "Cet outil de calcul est<br>développé par <b>Charfi Kaies</b></div>",
+        unsafe_allow_html=True,
+    )
+
+# Résolution numérique fixée au maximum pour garantir un calcul le plus précis
+# possible (plus de sliders exposés à l'utilisateur : le temps de calcul reste
+# raisonnable et on privilégie la robustesse du résultat).
+NX_BETON_MAX = 100
+NY_BETON_MAX = 100
+N_PTS_MAX = 80
+N_THETA_MAX = 96
 
 with st.sidebar:
     st.header("1. Section")
@@ -508,17 +533,25 @@ with st.sidebar:
         D = st.number_input("Diamètre D (m)", 0.10, 3.0, 0.50, 0.01)
         b = h = 0.30  # non utilisés
 
-    d_p = st.number_input("Enrobage jusqu'au centre des barres d_p (m)", 0.01, 0.20, 0.05, 0.005)
-
     st.header("2. Ferraillage")
     if type_section == "rectangulaire":
+        d_p = st.number_input("Enrobage jusqu'au centre des barres d_p (m)", 0.01, 0.20, 0.05, 0.005)
         nx_barres = st.number_input("Barres par face horizontale (haut/bas)", 2, 20, 4)
         ny_barres = st.number_input("Barres par face verticale (coins inclus)", 2, 20, 3)
-        n_barres = 12  # non utilisé
+        diam_mm = st.number_input("Diamètre des barres (mm)", 6, 40, 20)
+        nappes = []  # non utilisé
     else:
-        n_barres = st.number_input("Nombre de barres (couronne)", 4, 40, 12)
+        d_p = 0.05  # non utilisé (chaque nappe a son propre enrobage)
         nx_barres = ny_barres = 4  # non utilisés
-    diam_mm = st.number_input("Diamètre des barres (mm)", 6, 40, 20)
+        diam_mm = 20  # non utilisé (chaque nappe a son propre diamètre)
+        n_nappes = st.number_input("Nombre de nappes d'acier", 1, 4, 1)
+        nappes = []
+        for i in range(int(n_nappes)):
+            with st.expander(f"Nappe {i+1}", expanded=(i == 0)):
+                d_p_i = st.number_input(f"Enrobage nappe {i+1} (m)", 0.01, 0.20, 0.05, 0.005, key=f"dp_circ_{i}")
+                n_barres_i = st.number_input(f"Nombre de barres — nappe {i+1}", 3, 40, 12, key=f"nb_circ_{i}")
+                diam_i = st.number_input(f"Diamètre des barres (mm) — nappe {i+1}", 6, 40, 20, key=f"diam_circ_{i}")
+                nappes.append(dict(n_barres=int(n_barres_i), diam_mm=diam_i, d_p=d_p_i))
 
     st.header("3. Matériaux")
     fck = st.number_input("fck béton (MPa)", 12, 90, 25)
@@ -527,20 +560,13 @@ with st.sidebar:
     gamma_s = st.number_input("gamma_s", 1.0, 2.0, 1.15, 0.05)
     Es = st.number_input("Es acier (GPa)", 150, 220, 200)
 
-    st.header("4. Résolution numérique")
-    st.caption("Une résolution plus fine est plus précise mais plus lente.")
-    nx_beton = st.select_slider("Grille béton (NX = NY)", options=[20, 30, 40, 60, 80, 100], value=60)
-    ny_beton = nx_beton
-    n_pts = st.select_slider("Points par pivot", options=[20, 30, 40, 60, 80], value=60)
-    n_theta = st.select_slider("Nombre d'angles balayés", options=[12, 24, 36, 48, 72, 96], value=48)
-
     calculer_btn = st.button("Calculer / Recalculer la surface", type="primary", use_container_width=True)
 
 cfg = dict(
     type_section=type_section, b=b, h=h, D=D, d_p=d_p,
-    nx_barres=int(nx_barres), ny_barres=int(ny_barres), n_barres=int(n_barres), diam_mm=diam_mm,
+    nx_barres=int(nx_barres), ny_barres=int(ny_barres), diam_mm=diam_mm, nappes=nappes,
     fck=fck, gamma_c=gamma_c, fyk=fyk, gamma_s=gamma_s, Es=Es,
-    nx_beton=nx_beton, ny_beton=ny_beton, n_pts=n_pts, n_theta=n_theta,
+    nx_beton=NX_BETON_MAX, ny_beton=NY_BETON_MAX, n_pts=N_PTS_MAX, n_theta=N_THETA_MAX,
 )
 
 if "res" not in st.session_state:
@@ -612,9 +638,14 @@ with tab_export:
     N_export = st.number_input("N à exporter (kN)", min_value=n_min, max_value=n_max, value=min(max(800.0, n_min), n_max))
 
     df_crit = tableau_points_critiques(N_export, res["branches_N"], res["branches_My"], res["branches_Mz"], cfg_actif["n_theta"])
+    df_contour = tableau_contour_complet(N_export, res["branches_N"], res["branches_My"], res["branches_Mz"], cfg_actif["n_theta"])
     if df_crit is None:
         st.warning("N hors de la plage résistante de la section.")
     else:
+        st.write(f"**Tous les points du contour** ({len(df_contour)} points) :")
+        st.dataframe(df_contour.round(3), use_container_width=True, hide_index=True)
+
+        st.write("**Points critiques** (extrêmes et croisements d'axes) :")
         st.dataframe(df_crit.round(2), use_container_width=True, hide_index=True)
 
         ec1, ec2 = st.columns(2)
