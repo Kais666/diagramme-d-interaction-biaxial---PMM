@@ -502,6 +502,22 @@ def generer_rapport_pdf_bytes(cfg, res, N_cible_kN, n_theta):
 
 st.set_page_config(page_title="Diagramme biaxial N-My-Mz (EC2)", layout="wide")
 
+st.markdown(
+    """
+    <style>
+    h1, h2, h3 {
+        font-family: Georgia, 'Iowan Old Style', 'Times New Roman', serif !important;
+        letter-spacing: -0.01em;
+    }
+    [data-testid="stDataFrame"] * ,
+    [data-testid="stMetricValue"] {
+        font-variant-numeric: tabular-nums;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 col_titre, col_credit = st.columns([5, 1.3])
 with col_titre:
     st.title("Diagramme d'interaction biaxial N-My-Mz (Eurocode 2)")
