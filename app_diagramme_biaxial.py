@@ -368,6 +368,25 @@ def figure_coupe(N_cible_kN, res, n_theta):
     return fig, My_c, Mz_c
 
 
+def figure_pm_theta0(res):
+    """Diagramme N-M uniaxial le long de la branche theta=0 déjà calculée
+    (aucun nouveau calcul, juste une extraction/mise à l'échelle de res)."""
+    N_kN = res["branches_N"][0] / 1e3
+    My_kNm = res["branches_My"][0] / 1e3
+    Mz_kNm = res["branches_Mz"][0] / 1e3
+
+    fig, ax = plt.subplots(figsize=(6, 6))
+    ax.plot(My_kNm, N_kN, '-o', color='#2196F3', ms=3)
+    ax.axhline(0, color='black', lw=0.6, alpha=0.4)
+    ax.axvline(0, color='black', lw=0.6, alpha=0.4)
+    ax.set_xlabel('M (kN.m)')
+    ax.set_ylabel('N (kN)')
+    ax.set_title("Diagramme d'interaction N-M à theta = 0°")
+    ax.grid(alpha=0.3, ls='--')
+    plt.tight_layout()
+    return fig, N_kN, My_kNm, Mz_kNm
+
+
 def figure_verification(N_Ed, My_Ed, Mz_Ed, res, n_theta):
     My_c, Mz_c = coupe_a_N_constant(N_Ed * 1e3, res["branches_N"], res["branches_My"],
                                      res["branches_Mz"], n_theta)
@@ -615,8 +634,9 @@ col1.metric("Fibres béton", len(res["Xc"]))
 col2.metric("Barres acier", len(res["Xa"]), f"{np.sum(res['DA'])*1e4:.1f} cm²")
 col3.metric("Taux de ferraillage", f"{np.sum(res['DA'])/np.sum(res['dA'])*100:.2f} %")
 
-tab_section, tab_3d, tab_coupe, tab_verif, tab_export = st.tabs(
-    ["Section", "Surface 3D", "Coupe à N constant", "Vérification d'un point", "Export"]
+tab_section, tab_3d, tab_coupe, tab_pm0, tab_verif, tab_export = st.tabs(
+    ["Section", "Surface 3D", "Coupe à N constant", "Diagramme N-M (theta=0)",
+     "Vérification d'un point", "Export"]
 )
 
 with tab_section:
@@ -636,6 +656,31 @@ with tab_coupe:
     N_cible = st.slider("N (kN)", min_value=n_min, max_value=n_max, value=0.0, step=(n_max - n_min) / 200)
     fig_coupe, My_c, Mz_c = figure_coupe(N_cible, res, cfg_actif["n_theta"])
     st.pyplot(fig_coupe, use_container_width=False)
+
+with tab_pm0:
+    st.write(
+        "Coupe uniaxiale N-M le long de la direction theta = 0°, extraite directement de la "
+        "surface déjà calculée (aucun nouveau calcul)."
+    )
+    fig_pm0, N_pm0, My_pm0, Mz_pm0 = figure_pm_theta0(res)
+    st.pyplot(fig_pm0, use_container_width=False)
+
+    mz_max_abs = float(np.max(np.abs(Mz_pm0)))
+    my_max_abs = float(np.max(np.abs(My_pm0)))
+    st.write(f"**Max |Mz| le long de cette branche :** {mz_max_abs:.3f} kN.m")
+    if my_max_abs > 0 and mz_max_abs > 0.01 * my_max_abs:
+        st.warning(
+            f"|Mz| max ({mz_max_abs:.2f} kN.m) dépasse 1 % de My max ({my_max_abs:.2f} kN.m) — "
+            "la section n'est peut-être pas symétrique par rapport à cet axe (theta = 0°)."
+        )
+
+    df_pm0 = pd.DataFrame({"N (kN)": N_pm0, "My (kN.m)": My_pm0})
+    st.download_button(
+        "Télécharger CSV (N, My) — theta=0",
+        data=df_pm0.round(4).to_csv(index=False).encode("utf-8"),
+        file_name="diagramme_NM_theta0.csv",
+        mime="text/csv",
+    )
 
 with tab_verif:
     st.write("Vérifie si un point de sollicitation (N_Ed, My_Ed, Mz_Ed) est à l'intérieur de la surface de résistance.")
