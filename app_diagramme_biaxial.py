@@ -303,6 +303,14 @@ def calculer_tout(cfg):
 # FIGURES
 # ============================================================
 
+def tailles_barres(DA, diam_ref_mm=20, s_ref=80):
+    """Taille des marqueurs (points^2) proportionnelle à l'aire réelle de
+    chaque barre, calibrée pour qu'une barre de diam_ref_mm ait une taille
+    s_ref (garde le rendu visuel cohérent avec l'ancien affichage à Ø20)."""
+    diam_mm = 2 * np.sqrt(DA / np.pi) * 1000
+    return (diam_mm / diam_ref_mm) ** 2 * s_ref
+
+
 def figure_section(cfg, res):
     fig, ax = plt.subplots(figsize=(5, 5))
     if cfg["type_section"] == "rectangulaire":
@@ -312,7 +320,8 @@ def figure_section(cfg, res):
         ax.add_patch(plt.Circle((0, 0), cfg["D"]/2, facecolor='#212121',
                                  edgecolor='black', lw=1.5, zorder=1))
     ax.scatter(res["Xc"], res["Yc"], s=2, color='#555555', alpha=0.3, zorder=2, label='Fibres béton')
-    ax.scatter(res["Xa"], res["Ya"], s=80, color='#B0BEC5', edgecolor='black', zorder=3, label='Barres acier')
+    ax.scatter(res["Xa"], res["Ya"], s=tailles_barres(res["DA"]), color='#B0BEC5',
+               edgecolor='black', zorder=3, label='Barres acier')
     ax.set_aspect('equal')
     ax.set_title("Section et discrétisation")
     ax.legend(fontsize=8, loc='upper right')
@@ -456,7 +465,8 @@ def generer_rapport_pdf_bytes(cfg, res, N_cible_kN, n_theta):
         else:
             ax.add_patch(plt.Circle((0, 0), cfg['D']/2, facecolor='#212121',
                                      edgecolor='black', lw=1.5, zorder=1))
-        ax.scatter(res["Xa"], res["Ya"], s=80, color='#B0BEC5', edgecolor='black', zorder=3)
+        ax.scatter(res["Xa"], res["Ya"], s=tailles_barres(res["DA"]), color='#B0BEC5',
+                   edgecolor='black', zorder=3)
         ax.scatter(res["Xc"], res["Yc"], s=2, color='#555555', alpha=0.3, zorder=2)
         ax.set_aspect('equal')
         ax.set_title("Section et discrétisation", fontsize=13, fontweight='bold')
